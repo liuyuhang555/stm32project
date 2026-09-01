@@ -876,6 +876,16 @@
               <FileType>5</FileType>
               <FilePath>.\Driver\inc\TIM_Delay.h</FilePath>
             </File>
+            <File>
+              <FileName>tim2_iwdg_feed.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Driver\src\tim2_iwdg_feed.c</FilePath>
+            </File>
+            <File>
+              <FileName>tim2_iwdg_feed.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\Driver\inc\tim2_iwdg_feed.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

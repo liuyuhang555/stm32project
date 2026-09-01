@@ -20,7 +20,7 @@ static __INLINE uint8_t ESP_RxReadByte(void)
     return ch;
 }
 
-static void ESP_ClearRxBuf(void)
+ void ESP_ClearRxBuf(void)
 {
     rx_wr = 0;
     rx_rd = 0;
@@ -76,19 +76,16 @@ void USART2_IRQHandler(void)
     }
 }
 
-static void ESP_SendString(const char *str)
+void ESP_SendString(const char *str)
 {
-    USART_ITConfig(ESP_USARTx, USART_IT_RXNE, DISABLE);
-
     while(*str != '\0')
     {
         while(USART_GetFlagStatus(ESP_USARTx,USART_FLAG_TXE)==RESET);
         USART_SendData(ESP_USARTx,*str++);
     }
     while(USART_GetFlagStatus(ESP_USARTx,USART_FLAG_TC)==RESET);
-
-    USART_ITConfig(ESP_USARTx, USART_IT_RXNE, ENABLE);
 }
+
 
 
 ESP_Status_t ESP_SendAT(const char *cmd, const char *resp_ok, uint32_t timeout_ms)
@@ -96,14 +93,10 @@ ESP_Status_t ESP_SendAT(const char *cmd, const char *resp_ok, uint32_t timeout_m
     ESP_ClearRxBuf();
     ESP_SendString(cmd);
     ESP_SendString("\r\n");
-
     uint32_t tick_start = xTaskGetTickCount();
     TickType_t timeout_tick = pdMS_TO_TICKS(timeout_ms);
-
-    static char tmp[512];
-    memset(tmp,0,sizeof(tmp));
+    char tmp[512]={0};
     uint16_t idx = 0;
-
     while((xTaskGetTickCount() - tick_start) < timeout_tick)
     {
         while(ESP_RxGetCount()>0 && idx < sizeof(tmp)-1)
@@ -116,17 +109,16 @@ ESP_Status_t ESP_SendAT(const char *cmd, const char *resp_ok, uint32_t timeout_m
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    Serial_Printf("[ESP_SendAT] Timeout!\r\n");
     return ESP_TIMEOUT;
 }
+
 ESP_Status_t ESP_WaitRecv(const char *resp_ok, uint32_t timeout_ms)
 {
     uint32_t tick_start = xTaskGetTickCount();
     TickType_t timeout_tick = pdMS_TO_TICKS(timeout_ms);
-
-    static char tmp[512];
-    memset(tmp,0,sizeof(tmp));
+    char tmp[512]={0};
     uint16_t idx = 0;
-
     while((xTaskGetTickCount() - tick_start) < timeout_tick)
     {
         while(ESP_RxGetCount()>0 && idx < sizeof(tmp)-1)
@@ -139,8 +131,10 @@ ESP_Status_t ESP_WaitRecv(const char *resp_ok, uint32_t timeout_ms)
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    Serial_Printf("[ESP_WaitRecv] Timeout!\r\n");
     return ESP_TIMEOUT;
 }
+
 
 ESP_Status_t ESP_WifiConnect(const char *ssid,const char *pwd)
 {
@@ -223,4 +217,48 @@ ESP_Status_t ESP_TcpSend(const uint8_t* data,uint16_t len,uint32_t timeout_ms)
     //公网环境，不等待SEND OK，网络延迟高经常超时，直接返回OK
     return ESP_OK;
 }
+//发送AT命令追加\r\n，**不等待应答**（ESP_SendAT_NoWait）
+void ESP_SendAT_NoWait(const char *cmd)
+{
+    ESP_SendString(cmd);
+    ESP_SendString("\r\n");
+}
+//别名包装，和前面代码保持名字一致
+ESP_Status_t ESP_WaitResp(const char *resp_ok, uint32_t timeout_ms)
+{
+    return ESP_WaitRecv(resp_ok,timeout_ms);
+}
+ESP_Status_t ESP_MQTT_PubRaw(const char *topic,const uint8_t *payload,uint16_t pay_len,uint32_t timeout_ms)
+{
+    char cmd_buf[256];
+    ESP_ClearRxBuf();
+    //拼接AT+MQTTPUBRAW=0,"topic",length,0,0
+    sprintf(cmd_buf,"AT+MQTTPUBRAW=0,\"%s\",%d,0,0",topic,pay_len);
+    ESP_SendString(cmd_buf);
+    ESP_SendString("\r\n");
+    //第一步等待 ">" 提示符
+    ESP_Status_t ret = ESP_WaitRecv(">",timeout_ms);
+    if(ret != ESP_OK)
+    {
+        Serial_Printf("[PUBRAW] wait '>' failed\r\n");
+        return ret;
+    }
+    //发送原始载荷，不要追加\r\n
+    for(uint16_t i=0;i<pay_len;i++)
+    {
+        while(USART_GetFlagStatus(ESP_USARTx,USART_FLAG_TXE)==RESET);
+        USART_SendData(ESP_USARTx,payload[i]);
+    }
+    while(USART_GetFlagStatus(ESP_USARTx,USART_FLAG_TC)==RESET);
 
+    //====重点删除下面等待SEND OK的代码====
+    //ret = ESP_WaitRecv("SEND OK",timeout_ms);
+    //if(ret != ESP_OK)
+    //{
+    //    Serial_Printf("[PUBRAW] wait SEND OK timeout\r\n");
+    //}
+    //=====================================
+
+    Serial_Printf("[PUBRAW] send payload done, ignore SEND OK\r\n");
+    return ESP_OK;
+}

@@ -1,0 +1,20 @@
+##今天做了什么
+-在 STM32F103+FreeRTOS 项目中完成片内 Flash 保存报警阈值功能，编写 store 驱动，实现阈值断电不丢失。
+-对接队列实现 Flash 保存任务，和原有心跳监控、IWDG 硬件看门狗整合。
+-调试编译报错、链接重复定义、RTOS 软件看门狗误判任务死机等一系列 bug。
+-测试功能：按键修改温湿度阈值，保存到 Flash，断电重启参数正常加载。
+##今天学到的知识点
+-FreeRTOS 类型BaseType_t不要放在头文件，头文件只用标准 C 基础类型，避免其他文件报未知类型。
+-C 语言全局变量：.c中定义实体，.h用extern做外部声明，防止多重定义链接错误。
+-taskENTER_CRITICAL()临界段只适合极短寄存器操作，严禁放入 Flash 擦写等耗时操作，会冻结任务调度。
+-带心跳监控的任务不能使用portMAX_DELAY永久阻塞，也不能用长vTaskDelay；阻塞会停止心跳上报，被软件看门狗误判死机。
+-Flash 寿命保护：使用xQueueReset丢弃重复请求，不要用延时阻塞任务。
+-FreeRTConfig 中configUSE_TIMERS不用软件定时器时直接置 0，节省 RAM，避免缺少宏定义编译报错。
+##遇到的问题
+-报错unknown type name BaseType_t：头文件引入 FreeRTOS 类型，部分源文件没有包含 FreeRTOS.h。
+-链接错误multiply defined：全局变量 g_sys_cfg 在 main.c 和 store.c 两处重复定义。
+-开启 configUSE_TIMERS=1，缺少定时器相关宏定义直接编译报错。
+-FlashSaveTask 保存完成后被看门狗判定故障，触发 IWDG 硬件复位。
+-原因：临界段包裹 Flash 耗时操作；任务永久阻塞、长延时，心跳无法持续上报。
+##今日总结
+完成基于片上 Flash 的参数掉电保存功能，对 FreeRTOS 任务、临界段、心跳监控的理解加深。带故障监控的任务，要保证每一轮循环都可以执行心跳上报，避免长时间阻塞；临界段慎用，不能处理慢外设操作。后续写 RTOS 任务时优先考虑阻塞对心跳监控带来的副作用。

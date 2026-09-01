@@ -1,6 +1,5 @@
 #ifndef __RTOS_COMPONENTS_H
 #define __RTOS_COMPONENTS_H
-
 #include "FreeRTOS.h"
 #include "queue.h"
 #include "semphr.h"
@@ -31,13 +30,15 @@ enum TASK_IDX
 #define FLASH_SAVE_REQ     0x01U
 #define DHT_FAULT_MAX_CNT     5U      //DHT连续失败5次判定传感器故障
 
-/* WIFI MQTT 上传配置 */
-#define WIFI_SSID      "liu123"
-#define WIFI_PWD       "12125418"
-#define MQTT_HOST      "broker.emqx.io"
-#define MQTT_PORT      1883
-#define MQTT_CLI_ID    "stm32f103_sensor_001"
-#define MQTT_TOPIC     "sensor/env/data"
+/* WIFI MQTT 上传配置（保留，方便app_upload引用） */
+#define WIFI_NAME    "liu123"
+#define WIFI_PASS    "12125418"
+#define PRODUCT_ID   "2mH945T2h6"
+#define DEVICE_NAME  "xiangmu"
+#define TOKEN_STR    "version=2018-10-31&res=products%2F2mH945T2h6&et=1837089609&method=sha1&sign=uo%2F%2Bu%2BfccV%2BfP%2BGHId8fQw49MO0%3D"
+#define PUB_TOPIC    "$sys/2mH945T2h6/xiangmu/thing/property/post"
+#define SUB_TOPIC    "$sys/2mH945T2h6/xiangmu/thing/property/post/reply"
+#define UPLOAD_PERIOD_MS  5000
 
 
 /*************************
@@ -50,7 +51,6 @@ extern EventGroupHandle_t xSysEventGroup;
 /* 互斥量 */
 extern SemaphoreHandle_t xOledMutex;
 extern SemaphoreHandle_t xUartMutex;
-
 /* 业务全局状态变量 */
 extern uint8_t g_flashSaveReq;
 extern uint8_t g_last_temp;
@@ -64,12 +64,11 @@ void Task_ReportHeartbeat(uint8_t idx);
 /* MQTT报文构建函数，实现在main.c */
 uint16_t MQTT_BuildConnect(uint8_t* buf,const char* clientId);
 uint16_t MQTT_BuildPublish(uint8_t* buf,const char* topic,const char* payload);
-/* 心跳任务索引 */
+
+/* 心跳任务索引（宏，兼容原有代码） */
 #define TASK_IDX_SENSOR        0U
 #define TASK_IDX_DISPLAY       1U
 #define TASK_IDX_WATCHDOG      2U
-
-
-#define TASK_HEARTBEAT_NUM     3U   
+#define TASK_HEARTBEAT_NUM     3U
 
 #endif

@@ -24,5 +24,11 @@ ESP_Status_t ESP_MQTT_Publish(const char *topic,const char *payload);
 ESP_Status_t ESP_TcpConnect(const char* host,uint16_t port,uint32_t timeout_ms);
 ESP_Status_t ESP_TcpSend(const uint8_t* data,uint16_t len,uint32_t timeout_ms);
 
+void ESP_ClearRxBuf(void);
+void ESP_SendString(const char *str);
+void ESP_SendAT_NoWait(const char *cmd);
+ESP_Status_t ESP_WaitResp(const char *resp_ok, uint32_t timeout_ms);
+ESP_Status_t ESP_MQTT_PubRaw(const char *topic,const uint8_t *payload,uint16_t pay_len,uint32_t timeout_ms);
+
 
 #endif

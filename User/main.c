@@ -15,52 +15,15 @@
 #include "esp8266_at.h"
 #include <string.h>
 #include "rtos_components.h"
+#include "tim2_iwdg_feed.h"
 
 #include "app_sensor.h"
 #include "app_display.h"
 #include "app_upload.h"
 #include "app_lowpower.h"
 
-//构建MQTT CONNECT报文
-uint16_t MQTT_BuildConnect(uint8_t* buf,const char* clientId)
-{
-    uint16_t idx=0;
-    buf[idx++] = 0x10;
-    uint16_t rem_len = 14 + strlen(clientId);
-    buf[idx++] = rem_len;
-    buf[idx++] = 0x00;buf[idx++] =0x04;
-    buf[idx++] = 'M';buf[idx++]='Q';buf[idx++]='T';buf[idx++]='T';
-    buf[idx++] = 0x04;
-    buf[idx++] = 0x02; //clean session
-    buf[idx++] = 0x00;buf[idx++] = 0x3C; //keepalive 60
-    uint16_t cli_len = strlen(clientId);
-    buf[idx++] = (cli_len>>8)&0xFF;
-    buf[idx++] = cli_len&0xFF;
-    memcpy(buf+idx,clientId,cli_len);
-    idx += cli_len;
-    return idx;
-}
 
-//构建MQTT PUBLISH报文 QoS1
-uint16_t MQTT_BuildPublish(uint8_t* buf,const char* topic,const char* payload)
-{
-    uint16_t idx=0;
-    buf[idx++] = 0x32;  // DUP=0 QoS=1 RETAIN=0
-    uint16_t topic_len = strlen(topic);
-    uint16_t pay_len = strlen(payload);
-    uint16_t rem_len = 2 + topic_len + 2 + pay_len; //+2 bytes msgid
-    buf[idx++] = rem_len;
-    buf[idx++] = (topic_len>>8)&0xFF;
-    buf[idx++] = topic_len&0xFF;
-    memcpy(buf+idx,topic,topic_len);
-    idx += topic_len;
-    //message id
-    buf[idx++] = 0x00;
-    buf[idx++] = 0x01;
-    memcpy(buf+idx,payload,pay_len);
-    idx += pay_len;
-    return idx;
-}
+
 
 uint8_t g_in_stop_mode = 0;  // 1=正在STOP休眠
 uint8_t g_enterStopReq = 0;
@@ -125,7 +88,7 @@ void vApplicationIdleHook(void)
 
 /**
  * @brief 看门狗异常处理任务
- * 1.任务心跳卡死；2.DHT11连续读取失败；任一条件停止喂狗，IWDG复位
+ * 心跳异常只打印告警，不再停止喂狗，避免外设短暂阻塞触发整机复位
  */
 void vWatchdogTask(void *pvParameters)
 {
@@ -159,25 +122,24 @@ void vWatchdogTask(void *pvParameters)
         {
             g_TaskHeartBeatList[i].lastHeartbeat = g_TaskHeartBeatList[i].heartbeat;
         }
-        if(systemAbnormal == 0)
+        if(systemAbnormal == 1)
         {
-            IWDG_Feed();
+            Serial_Printf("[WATCHDOG] FAULT! Task hang detected\r\n");
         }
-        else
-        {
-            Serial_Printf("[WATCHDOG] FAULT! Wait IWDG Reset...\r\n");
-        }
-					//每5s打印栈水位
+//        //=====核心改动：无论正常/故障，每次循环固定喂狗，不再被if阻断=====
+//        IWDG_Feed();
+
+        //每5s打印栈水位
         if((xTaskGetTickCount() - xStackPrintTick) >= pdMS_TO_TICKS(5000))
         {
             xStackPrintTick = xTaskGetTickCount();
             UBaseType_t stack_water = uxTaskGetStackHighWaterMark(NULL);
 //            Serial_Printf("[Stack] WatchdogTask water:%d words\r\n", stack_water);
         }
-
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+
 
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
@@ -212,6 +174,7 @@ int main(void)
     OLED_Clear();
     TIM_Delay_Init();
     IWDG_Config(IWDG_Prescaler_64,1250);
+		TIM2_FeedInit();   //新增，定时器中断自动喂狗
     Store_LoadConfig();
     OLED_ShowChinese(0,0,"温度：  ");
     OLED_ShowChinese(0,16,"湿度： ");
