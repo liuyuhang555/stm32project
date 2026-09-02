@@ -15,7 +15,7 @@
 #include "esp8266_at.h"
 #include <string.h>
 #include "rtos_components.h"
-#include "tim2_iwdg_feed.h"
+
 
 #include "app_sensor.h"
 #include "app_display.h"
@@ -88,7 +88,7 @@ void vApplicationIdleHook(void)
 
 /**
  * @brief 看门狗异常处理任务
- * 心跳异常只打印告警，不再停止喂狗，避免外设短暂阻塞触发整机复位
+ * 
  */
 void vWatchdogTask(void *pvParameters)
 {
@@ -124,21 +124,27 @@ void vWatchdogTask(void *pvParameters)
         }
         if(systemAbnormal == 1)
         {
-            Serial_Printf("[WATCHDOG] FAULT! Task hang detected\r\n");
+            Serial_Printf("[WATCHDOG] FAULT! Task hang detected, stop feed dog\r\n");
+            //故障：不喂狗，等待硬件复位
         }
-//        //=====核心改动：无论正常/故障，每次循环固定喂狗，不再被if阻断=====
-//        IWDG_Feed();
+        else
+        {
+            //系统正常，看门狗任务喂狗
+            IWDG_Feed();
+        }
 
         //每5s打印栈水位
         if((xTaskGetTickCount() - xStackPrintTick) >= pdMS_TO_TICKS(5000))
         {
             xStackPrintTick = xTaskGetTickCount();
             UBaseType_t stack_water = uxTaskGetStackHighWaterMark(NULL);
-//            Serial_Printf("[Stack] WatchdogTask water:%d words\r\n", stack_water);
+            //Serial_Printf("[Stack] WatchdogTask water:%d words\r\n", stack_water);
         }
+        //任务周期1000ms
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+
 
 
 
@@ -174,7 +180,7 @@ int main(void)
     OLED_Clear();
     TIM_Delay_Init();
     IWDG_Config(IWDG_Prescaler_64,1250);
-		TIM2_FeedInit();   //新增，定时器中断自动喂狗
+//		TIM2_FeedInit();   //新增，定时器中断自动喂狗
     Store_LoadConfig();
     OLED_ShowChinese(0,0,"温度：  ");
     OLED_ShowChinese(0,16,"湿度： ");
